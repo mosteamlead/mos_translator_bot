@@ -2,6 +2,7 @@ from typing import Literal
 
 from bot.config import settings
 from bot.services.openai_client import client
+from bot.services.lang_detect import detect_language
 
 AppLang = Literal["RU", "EN", "VI"]
 
@@ -47,13 +48,29 @@ async def translate_text(
         f"Text:\n{text}"
     )
 
-    response = await client.chat.completions.create(
-        model=settings.openai_model,
-        messages=[
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt},
-        ],
-        temperature=0.2,
-    )
+    async def _call_model(extra_hint: str = "") -> str:
+        final_user_prompt = user_prompt + extra_hint
+        response = await client.chat.completions.create(
+            model=settings.openai_model,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": final_user_prompt},
+            ],
+            temperature=0.2,
+        )
+        return (response.choices[0].message.content or "").strip()
 
-    return (response.choices[0].message.content or "").strip()
+    # Первый вызов
+    translation = await _call_model()
+
+    # Пост‑проверка: если модель всё равно ответила не на целевом языке,
+    # пробуем один раз уточнить инструкцию и переспросить.
+    out_lang = detect_language(translation)
+    if out_lang is None or out_lang != target_lang:
+        strong_hint = (
+            "\n\nIMPORTANT: Your answer MUST be written entirely in "
+            f"{target_name} only. Do NOT use any other language."
+        )
+        translation = await _call_model(strong_hint)
+
+    return translation.strip()
