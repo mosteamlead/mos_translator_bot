@@ -232,7 +232,9 @@ async def on_second_language(callback: CallbackQuery):
 
     texts = UI_TEXTS.get(lang_from_code, UI_TEXTS["EN"])
 
-    await callback.message.edit_text(
+    # Отправляем новое сообщение (а не редактируем старое),
+    # потому что к edit_text нельзя прикреплять reply-клавиатуру.
+    await callback.message.answer(
         f"{from_meta['flag']} {from_meta['label']} ({lang_from_code}) → "
         f"{to_meta['flag']} {to_meta['label']} ({lang_to_code})\n\n"
         f"{texts['pair_configured']}",
