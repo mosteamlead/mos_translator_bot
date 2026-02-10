@@ -177,12 +177,24 @@ async def handle_voice(message: Message):
     )
 
     src_lang, dst_lang = choose_direction(detected, lang_from, lang_to, text)
-    try:
+        try:
         translation = await translate_text(text, source_lang=src_lang, target_lang=dst_lang)
     except Exception as e:
         logger.exception("Translation error (voice): %s", e)
-        await message.answer("❌ Error while translating your voice message.")
+        await message.answer("❌ Ошибка при переводе голосового сообщения. Попробуй ещё раз.")
         return
 
-    # Для голосовых тоже отправляем только перевод
+    # Проверяем язык ГОТОВОГО перевода.
+    # Если он не совпадает с целевым (например, должен быть RU, а получился EN),
+    # не показываем этот текст, а просим перезаписать.
+    out_lang = detect_language(translation)
+    if out_lang is None or out_lang != dst_lang:
+        await message.answer(
+            "Кажется, я неправильно распознал голосовое и не уверен в переводе.\n\n"
+            "Пожалуйста, перезапиши сообщение чуть чётче, желательно в тихом месте — "
+            "и я попробую перевести ещё раз."
+        )
+        return
+
+    # Для голосовых, если всё ок — отправляем только перевод
     await message.answer(translation)
