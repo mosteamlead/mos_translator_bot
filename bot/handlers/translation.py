@@ -25,7 +25,7 @@ def choose_direction(
     - If detected == lang_from -> translate to lang_to
     - If detected == lang_to   -> translate to lang_from
     - If detection failed (None) -> assume text in lang_from, translate to lang_to
-    - Else (other language)      -> translate to lang_from
+    - Else (other language)      -> translate to lang_from (родной)
     """
     if detected == lang_from:
         return lang_from, lang_to
@@ -82,11 +82,8 @@ async def handle_text(message: Message):
         await message.answer("❌ Error while translating text. Please try again later.")
         return
 
-    await message.answer(
-        f"{translation}\n\n"
-        "Если хочешь сменить языки — нажми одну из кнопок ниже 👇",
-        reply_markup=build_main_menu_keyboard(),
-    )
+    # Только перевод, без дополнительных фраз и без меню под сообщением
+    await message.answer(translation)
 
 
 @router.message(F.voice | F.audio)
@@ -121,7 +118,10 @@ async def handle_voice(message: Message):
         return
 
     try:
-        text = await transcribe_audio(local_path)
+        # Если первый язык — русский, подсказываем распознавалке, что речь на русском,
+        # чтобы снизить шанс перепутать язык.
+        forced_lang = lang_from if lang_from == "RU" else None
+        text = await transcribe_audio(local_path, forced_lang)
     except Exception as e:
         logger.exception("Failed to transcribe audio: %s", e)
         await message.answer("❌ Error while transcribing your voice message.")
@@ -154,9 +154,5 @@ async def handle_voice(message: Message):
         await message.answer("❌ Error while translating your voice message.")
         return
 
-    await message.answer(
-        f"🗣 <b>Recognized text:</b>\n{text}\n\n"
-        f"🌐 <b>Translation:</b>\n{translation}\n\n"
-        "Если хочешь сменить языки — нажми одну из кнопок ниже 👇",
-        reply_markup=build_main_menu_keyboard(),
-    )
+    # Для голосовых тоже отправляем только перевод
+    await message.answer(translation)
