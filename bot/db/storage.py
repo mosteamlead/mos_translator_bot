@@ -67,6 +67,7 @@ async def get_user_languages(
         return None
     return row[0], row[1]
 
+
 async def reset_user_languages(user_id: int) -> None:
     """Reset both languages for the user."""
     async with aiosqlite.connect(settings.database_path) as db:

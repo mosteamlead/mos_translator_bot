@@ -10,6 +10,7 @@ from bot.db.storage import get_user_languages
 from bot.services.lang_detect import detect_language
 from bot.services.translation_service import translate_text, AppLang
 from bot.services.voice_service import transcribe_audio
+from bot.handlers.start import build_main_menu_keyboard
 
 router = Router()
 logger = logging.getLogger(__name__)
@@ -20,6 +21,11 @@ def choose_direction(
     lang_from: AppLang,
     lang_to: AppLang,
 ) -> Tuple[AppLang, AppLang]:
+    """
+    - If detected == lang_from -> translate to lang_to
+    - If detected == lang_to   -> translate to lang_from
+    - Else                     -> to lang_from
+    """
     if detected == lang_from:
         return lang_from, lang_to
     if detected == lang_to:
@@ -44,6 +50,9 @@ async def _ensure_lang_pair(message: Message) -> Optional[Tuple[AppLang, AppLang
 
 @router.message(F.text & ~F.via_bot)
 async def handle_text(message: Message):
+    """
+    Handle text messages: auto-detect language, choose direction, translate.
+    """
     lang_pair = await _ensure_lang_pair(message)
     if not lang_pair:
         return
@@ -68,11 +77,21 @@ async def handle_text(message: Message):
         await message.answer("❌ Error while translating text. Please try again later.")
         return
 
-    await message.answer(translation)
+    await message.answer(
+        f"{translation}\n\n"
+        "Если хочешь сменить языки — нажми одну из кнопок ниже 👇",
+        reply_markup=build_main_menu_keyboard(),
+    )
 
 
 @router.message(F.voice | F.audio)
 async def handle_voice(message: Message):
+    """
+    Handle voice messages:
+    1. Download file
+    2. Transcribe with Whisper
+    3. Auto-detect language and translate
+    """
     lang_pair = await _ensure_lang_pair(message)
     if not lang_pair:
         return
@@ -132,5 +151,7 @@ async def handle_voice(message: Message):
 
     await message.answer(
         f"🗣 <b>Recognized text:</b>\n{text}\n\n"
-        f"🌐 <b>Translation:</b>\n{translation}"
+        f"🌐 <b>Translation:</b>\n{translation}\n\n"
+        "Если хочешь сменить языки — нажми одну из кнопок ниже 👇",
+        reply_markup=build_main_menu_keyboard(),
     )
