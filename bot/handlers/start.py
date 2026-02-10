@@ -1,6 +1,6 @@
 from aiogram import Router, F
 from aiogram.filters import CommandStart, Command
-from aiogram.types import Message, CallbackQuery
+from aiogram.types import Message, CallbackQuery, ReplyKeyboardMarkup, KeyboardButton
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from bot.db.storage import (
@@ -113,23 +113,19 @@ def build_second_lang_keyboard(exclude_code: str):
     return builder.as_markup()
 
 
-def build_main_menu_keyboard():
+def build_main_menu_keyboard() -> ReplyKeyboardMarkup:
     """
-    Инлайн-меню:
-    - 🔁 Выбрать другие языки (полный выбор пары с нуля)
-    - 🏠 Выбор родного языка (логически то же самое, но текстом подчёркиваем акцент)
+    Клавиатура внизу (reply-keyboard), а не инлайн.
+    Используем только текст кнопок, без callback data.
     """
-    builder = InlineKeyboardBuilder()
-    builder.button(
-        text="🔁 Выбрать другие языки",
-        callback_data="change_lang_pair",
+    return ReplyKeyboardMarkup(
+        keyboard=[
+            [KeyboardButton(text="🔁 Выбрать другие языки")],
+            [KeyboardButton(text="🏠 Выбор родного языка")],
+        ],
+        resize_keyboard=True,
+        one_time_keyboard=False,
     )
-    builder.button(
-        text="🏠 Выбор родного языка",
-        callback_data="change_native_lang",
-    )
-    builder.adjust(1)
-    return builder.as_markup()
 
 
 async def _ask_first_language(message: Message):
@@ -165,41 +161,30 @@ async def cmd_menu(message: Message):
     )
 
 
-async def _start_lang_selection_again(callback_or_message):
+async def _start_lang_selection_again(message: Message):
     """
     Общая логика начала выбора языков заново.
     Используется и для 'выбрать другие языки', и для 'выбор родного языка'.
     """
-    user_id = callback_or_message.from_user.id
+    user_id = message.from_user.id
     await reset_user_languages(user_id)
-
-    # Сообщение тоже хотим показать на родном языке, если он был известен раньше.
-    # Но так как мы только что сбросили, ориентируемся на RU по умолчанию.
     texts = UI_TEXTS.get("RU", UI_TEXTS["EN"])
-
-    if isinstance(callback_or_message, CallbackQuery):
-        await callback_or_message.message.edit_text(
-            texts["change_lang_start"],
-            reply_markup=build_first_lang_keyboard(),
-        )
-        await callback_or_message.answer()
-    else:
-        await callback_or_message.answer(
-            texts["change_lang_start"],
-            reply_markup=build_first_lang_keyboard(),
-        )
+    await message.answer(
+        texts["change_lang_start"],
+        reply_markup=build_first_lang_keyboard(),
+    )
 
 
-@router.callback_query(F.data == "change_lang_pair")
-async def on_change_lang_pair(callback: CallbackQuery):
-    """Кнопка '🔁 Выбрать другие языки'."""
-    await _start_lang_selection_again(callback)
+@router.message(F.text == "🔁 Выбрать другие языки")
+async def on_change_lang_pair(message: Message):
+    """Кнопка '🔁 Выбрать другие языки' из нижней клавиатуры."""
+    await _start_lang_selection_again(message)
 
 
-@router.callback_query(F.data == "change_native_lang")
-async def on_change_native_lang(callback: CallbackQuery):
-    """Кнопка '🏠 Выбор родного языка'."""
-    await _start_lang_selection_again(callback)
+@router.message(F.text == "🏠 Выбор родного языка")
+async def on_change_native_lang(message: Message):
+    """Кнопка '🏠 Выбор родного языка' из нижней клавиатуры."""
+    await _start_lang_selection_again(message)
 
 
 @router.callback_query(F.data.startswith("lang1:"))
