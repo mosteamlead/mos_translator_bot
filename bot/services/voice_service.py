@@ -1,6 +1,7 @@
 import os
 import tempfile
 from pathlib import Path
+from typing import Optional
 
 from pydub import AudioSegment
 
@@ -20,11 +21,13 @@ async def convert_ogg_to_mp3(input_path: Path) -> Path:
     return output_path
 
 
-async def transcribe_audio(input_path: Path) -> str:
+async def transcribe_audio(input_path: Path, forced_lang: Optional[str] = None) -> str:
     """
     Transcribe audio file using Whisper (OpenAI).
     Accepts OGG/MP3/etc; converts if needed.
     Returns recognized text.
+    If forced_lang is provided (RU/EN/VI), we tell Whisper to use this language
+    instead of auto-detecting, which делает распознавание устойчивее.
     """
     path = Path(input_path)
 
@@ -32,11 +35,20 @@ async def transcribe_audio(input_path: Path) -> str:
         path = await convert_ogg_to_mp3(path)
 
     with path.open("rb") as audio_file:
-        response = await client.audio.transcriptions.create(
-            model=settings.openai_whisper_model,
-            file=audio_file,
-            response_format="text",
-        )
+        params = {
+            "model": settings.openai_whisper_model,
+            "file": audio_file,
+            "response_format": "text",
+        }
+
+        if forced_lang == "RU":
+            params["language"] = "ru"
+        elif forced_lang == "EN":
+            params["language"] = "en"
+        elif forced_lang == "VI":
+            params["language"] = "vi"
+
+        response = await client.audio.transcriptions.create(**params)
 
     try:
         if path.exists() and path.suffix.lower() == ".mp3":

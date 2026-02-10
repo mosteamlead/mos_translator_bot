@@ -23,9 +23,9 @@ UI_TEXTS = {
     "EN": {
         "ask_first": (
             "Hi! I am a bilingual translator bot.\n\n"
-            "First, choose your **native language**:"
+            "First, choose your <b>native language</b>:"
         ),
-        "ask_second": "Now choose your **second language**:",
+        "ask_second": "Now choose your <b>second language</b>:",
         "pair_configured": (
             "Language pair configured ✅\n\n"
             "Now send me any text or voice message.\n"
@@ -46,15 +46,14 @@ UI_TEXTS = {
     "RU": {
         "ask_first": (
             "Привет! Я двуязычный бот‑переводчик.\n\n"
-            "Сначала выбери свой **родной язык**:"
+            "Сначала выбери свой <b>родной язык</b>:"
         ),
-        "ask_second": "Теперь выбери **второй язык**:",
+        "ask_second": "Теперь выбери <b>второй язык</b>:",
         "pair_configured": (
             "Пара языков настроена ✅\n\n"
             "Теперь можешь отправлять мне текст или голосовые.\n"
             "- Если пишешь на первом языке, переведу на второй.\n"
-            "- Если пишешь на втором, переведу на первый.\n"
-            "- Другие языки → перевожу на первый язык.\n\n"
+            "- Если пишешь на втором, переведу на первый.\n\n"
             "Если захочешь поменять — используй /menu или кнопки ниже."
         ),
         "menu_title": (
@@ -64,15 +63,15 @@ UI_TEXTS = {
         ),
         "change_lang_start": (
             "Хорошо, давай выберем языки заново.\n\n"
-            "Сначала выбери свой **родной язык**:"
+            "Сначала выбери свой <b>родной язык</b>:"
         ),
     },
     "VI": {
         "ask_first": (
             "Xin chào! Tôi là bot dịch song ngữ.\n\n"
-            "Trước hết hãy chọn **ngôn ngữ mẹ đẻ** của bạn:"
+            "Trước hết hãy chọn <b>ngôn ngữ mẹ đẻ</b> của bạn:"
         ),
-        "ask_second": "Bây giờ hãy chọn **ngôn ngữ thứ hai**:",
+        "ask_second": "Bây giờ hãy chọn <b>ngôn ngữ thứ hai</b>:",
         "pair_configured": (
             "Cặp ngôn ngữ đã được thiết lập ✅\n\n"
             "Bây giờ hãy gửi cho tôi bất kỳ văn bản hoặc tin nhắn thoại nào.\n"
@@ -88,7 +87,7 @@ UI_TEXTS = {
         ),
         "change_lang_start": (
             "Được, hãy chọn lại ngôn ngữ.\n\n"
-            "Trước hết hãy chọn **ngôn ngữ mẹ đẻ**:"
+            "Trước hết hãy chọn <b>ngôn ngữ mẹ đẻ</b>:"
         ),
     },
 }
