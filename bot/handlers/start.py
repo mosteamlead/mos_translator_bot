@@ -30,9 +30,7 @@ UI_TEXTS = {
             "Language pair configured ✅\n\n"
             "Now send me any text or voice message.\n"
             "- If you write in the first language, I'll translate to the second.\n"
-            "- If you write in the second, I'll translate to the first.\n"
-            "- Other languages → I translate to the first language.\n\n"
-            "If you want to change languages, use /menu or the buttons below."
+            "- If you write in the second, I'll translate to the first."
         ),
         "menu_title": (
             "Menu:\n"
@@ -53,8 +51,7 @@ UI_TEXTS = {
             "Пара языков настроена ✅\n\n"
             "Теперь можешь отправлять мне текст или голосовые.\n"
             "- Если пишешь на первом языке, переведу на второй.\n"
-            "- Если пишешь на втором, переведу на первый.\n\n"
-            "Если захочешь поменять — используй /menu или кнопки ниже."
+            "- Если пишешь на втором, переведу на первый."
         ),
         "menu_title": (
             "Меню:\n"
@@ -76,9 +73,7 @@ UI_TEXTS = {
             "Cặp ngôn ngữ đã được thiết lập ✅\n\n"
             "Bây giờ hãy gửi cho tôi bất kỳ văn bản hoặc tin nhắn thoại nào.\n"
             "- Nếu bạn viết bằng ngôn ngữ thứ nhất, tôi sẽ dịch sang ngôn ngữ thứ hai.\n"
-            "- Nếu bạn viết bằng ngôn ngữ thứ hai, tôi sẽ dịch sang ngôn ngữ thứ nhất.\n"
-            "- Ngôn ngữ khác → tôi dịch sang ngôn ngữ thứ nhất.\n\n"
-            "Nếu muốn thay đổi – hãy dùng /menu hoặc các nút bên dưới."
+            "- Nếu bạn viết bằng ngôn ngữ thứ hai, tôi sẽ dịch sang ngôn ngữ thứ nhất."
         ),
         "menu_title": (
             "Menu:\n"
