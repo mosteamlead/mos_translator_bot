@@ -148,10 +148,7 @@ async def handle_voice(message: Message):
         return
 
     try:
-        # Если первый язык — русский, подсказываем распознавалке, что речь на русском,
-        # чтобы снизить шанс перепутать язык.
-        forced_lang = lang_from if lang_from == "RU" else None
-        text = await transcribe_audio(local_path, forced_lang)
+        text = await transcribe_audio(local_path)
     except Exception as e:
         logger.exception("Failed to transcribe audio: %s", e)
         await message.answer("❌ Error while transcribing your voice message.")
@@ -169,24 +166,23 @@ async def handle_voice(message: Message):
 
     detected = detect_language(text)
     logger.info(
-        "Voice message from %s, detected_lang=%s, pair=(%s,%s)",
+        "Voice message from %s, detected_lang=%s, pair=(%s,%s), text='%s'",
         message.from_user.id,
         detected,
         lang_from,
         lang_to,
+        text[:100],
     )
 
     src_lang, dst_lang = choose_direction(detected, lang_from, lang_to, text)
-        try:
+    try:
         translation = await translate_text(text, source_lang=src_lang, target_lang=dst_lang)
     except Exception as e:
         logger.exception("Translation error (voice): %s", e)
         await message.answer("❌ Ошибка при переводе голосового сообщения. Попробуй ещё раз.")
         return
 
-    # Проверяем язык ГОТОВОГО перевода.
-    # Если он не совпадает с целевым (например, должен быть RU, а получился EN),
-    # не показываем этот текст, а просим перезаписать.
+    # Проверяем язык готового перевода: если не совпадает с целевым, просим перезаписать
     out_lang = detect_language(translation)
     if out_lang is None or out_lang != dst_lang:
         await message.answer(
@@ -196,5 +192,5 @@ async def handle_voice(message: Message):
         )
         return
 
-    # Для голосовых, если всё ок — отправляем только перевод
+    # Если всё ок — отправляем только перевод
     await message.answer(translation)
