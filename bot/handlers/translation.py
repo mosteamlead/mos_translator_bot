@@ -24,13 +24,18 @@ def choose_direction(
     """
     - If detected == lang_from -> translate to lang_to
     - If detected == lang_to   -> translate to lang_from
-    - Else                     -> to lang_from
+    - If detection failed (None) -> assume text in lang_from, translate to lang_to
+    - Else (other language)      -> translate to lang_from
     """
     if detected == lang_from:
         return lang_from, lang_to
     if detected == lang_to:
         return lang_to, lang_from
-    return detected or lang_from, lang_from
+    if detected is None:
+        # короткий текст, не распознали язык — считаем, что это первый язык
+        return lang_from, lang_to
+    # другой язык → переводим на первый (родной)
+    return detected, lang_from
 
 
 async def _ensure_lang_pair(message: Message) -> Optional[Tuple[AppLang, AppLang]]:
