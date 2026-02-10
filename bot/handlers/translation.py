@@ -24,6 +24,11 @@ def _looks_latin(text: str) -> bool:
     return latin / len(letters) > 0.6
 
 
+def _has_cyrillic(text: str) -> bool:
+    """Проверяем, есть ли кириллица (русский)."""
+    return any("а" <= ch.lower() <= "я" or ch in "ёЁ" for ch in text)
+
+
 def choose_direction(
     detected: Optional[str],
     lang_from: AppLang,
@@ -44,12 +49,18 @@ def choose_direction(
     - Если распознали другой язык -> переводим на RU (как наиболее безопасный вариант)
     """
     if detected == lang_from:  # RU -> lang_to
+        # но если пара RU-VI и в тексте совсем нет кириллицы, то это, скорее всего, VI -> RU
+        if lang_to == "VI" and not _has_cyrillic(text):
+            return lang_to, lang_from
         return lang_from, lang_to
     if detected == lang_to:  # EN/VI -> RU
         return lang_to, lang_from
     if detected is None:
         if lang_to == "EN" and _looks_latin(text):
             # короткий латинский текст при паре RU-EN — скорее всего английский
+            return lang_to, lang_from
+        if lang_to == "VI" and not _has_cyrillic(text):
+            # при паре RU-VI и отсутствии кириллицы считаем, что это вьетнамский
             return lang_to, lang_from
         # иначе считаем, что это русский
         return lang_from, lang_to
