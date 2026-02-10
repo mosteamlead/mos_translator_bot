@@ -21,19 +21,24 @@ def choose_direction(
     lang_to: AppLang,
 ) -> Tuple[AppLang, AppLang]:
     """
-    - If detected == lang_from -> translate to lang_to
-    - If detected == lang_to   -> translate to lang_from
-    - If detection failed (None) -> assume text in lang_from, translate to lang_to
-    - Else (other language)      -> translate to lang_from (родной)
+    Упрощённая логика для русского бота:
+    - lang_from всегда RU (родной)
+    - lang_to = EN или VI (язык перевода)
+
+    Правила:
+    - Если распознали RU -> переводим на lang_to
+    - Если распознали lang_to -> переводим на RU
+    - Если не распознали (None) -> считаем, что это RU и переводим на lang_to
+    - Если распознали другой язык -> тоже переводим на RU (как наиболее безопасный вариант)
     """
-    if detected == lang_from:
+    if detected == lang_from:  # RU -> lang_to
         return lang_from, lang_to
-    if detected == lang_to:
+    if detected == lang_to:  # EN/VI -> RU
         return lang_to, lang_from
     if detected is None:
-        # короткий текст, не распознали язык — считаем, что это первый язык
+        # короткий текст, не распознали язык — считаем, что это русский
         return lang_from, lang_to
-    # другой язык → переводим на первый (родной)
+    # другой язык → переводим на русский
     return detected, lang_from
 
 
