@@ -66,3 +66,18 @@ async def get_user_languages(
     if row is None:
         return None
     return row[0], row[1]
+
+async def reset_user_languages(user_id: int) -> None:
+    """Reset both languages for the user."""
+    async with aiosqlite.connect(settings.database_path) as db:
+        await db.execute(
+            """
+            UPDATE user_settings
+            SET lang_from = NULL,
+                lang_to   = NULL,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE user_id = ?
+            """,
+            (user_id,),
+        )
+        await db.commit()
