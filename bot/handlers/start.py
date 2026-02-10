@@ -134,9 +134,9 @@ def build_main_menu_keyboard():
 
 
 async def _ask_first_language(message: Message):
-    # Первое сообщение всегда на английском, как ты хотела
     await message.answer(
-        UI_TEXTS["EN"]["ask_first"],
+        "Hi! I am a bilingual translator bot.\n\n"
+        "First, choose your <b>native language</b>:",
         reply_markup=build_first_lang_keyboard(),
     )
 
