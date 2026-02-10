@@ -1,6 +1,6 @@
 from aiogram import Router, F
 from aiogram.filters import CommandStart, Command
-from aiogram.types import Message, CallbackQuery, ReplyKeyboardMarkup, KeyboardButton
+from aiogram.types import Message, CallbackQuery
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from bot.db.storage import (
@@ -113,21 +113,6 @@ def build_second_lang_keyboard(exclude_code: str):
     return builder.as_markup()
 
 
-def build_main_menu_keyboard() -> ReplyKeyboardMarkup:
-    """
-    Клавиатура внизу (reply-keyboard), а не инлайн.
-    Используем только текст кнопок, без callback data.
-    """
-    return ReplyKeyboardMarkup(
-        keyboard=[
-            [KeyboardButton(text="🔁 Выбрать другие языки")],
-            [KeyboardButton(text="🏠 Выбор родного языка")],
-        ],
-        resize_keyboard=True,
-        one_time_keyboard=False,
-    )
-
-
 async def _ask_first_language(message: Message):
     await message.answer(
         "Hi! I am a bilingual translator bot.\n\n"
@@ -146,45 +131,19 @@ async def cmd_start(message: Message):
 @router.message(Command("menu"))
 async def cmd_menu(message: Message):
     """
-    Простое меню с кнопками:
-    - выбрать другие языки
-    - выбрать родной язык
+    Простое текстовое меню без кнопок.
+    Пользователь управляет ботом только командами.
     """
-    # Попробуем узнать родной язык, чтобы текст меню показать на нём
     langs = await get_user_languages(message.from_user.id)
     native = langs[0] if langs and langs[0] else "RU"
     texts = UI_TEXTS.get(native, UI_TEXTS["EN"])
 
     await message.answer(
-        texts["menu_title"],
-        reply_markup=build_main_menu_keyboard(),
+        texts["menu_title"]
+        + "\n\nДоступные команды:\n"
+        "- /start — выбрать языки заново\n"
+        "- /menu — показать это меню",
     )
-
-
-async def _start_lang_selection_again(message: Message):
-    """
-    Общая логика начала выбора языков заново.
-    Используется и для 'выбрать другие языки', и для 'выбор родного языка'.
-    """
-    user_id = message.from_user.id
-    await reset_user_languages(user_id)
-    texts = UI_TEXTS.get("RU", UI_TEXTS["EN"])
-    await message.answer(
-        texts["change_lang_start"],
-        reply_markup=build_first_lang_keyboard(),
-    )
-
-
-@router.message(F.text == "🔁 Выбрать другие языки")
-async def on_change_lang_pair(message: Message):
-    """Кнопка '🔁 Выбрать другие языки' из нижней клавиатуры."""
-    await _start_lang_selection_again(message)
-
-
-@router.message(F.text == "🏠 Выбор родного языка")
-async def on_change_native_lang(message: Message):
-    """Кнопка '🏠 Выбор родного языка' из нижней клавиатуры."""
-    await _start_lang_selection_again(message)
 
 
 @router.callback_query(F.data.startswith("lang1:"))
@@ -232,12 +191,9 @@ async def on_second_language(callback: CallbackQuery):
 
     texts = UI_TEXTS.get(lang_from_code, UI_TEXTS["EN"])
 
-    # Отправляем новое сообщение (а не редактируем старое),
-    # потому что к edit_text нельзя прикреплять reply-клавиатуру.
     await callback.message.answer(
         f"{from_meta['flag']} {from_meta['label']} ({lang_from_code}) → "
         f"{to_meta['flag']} {to_meta['label']} ({lang_to_code})\n\n"
         f"{texts['pair_configured']}",
-        reply_markup=build_main_menu_keyboard(),
     )
     await callback.answer()

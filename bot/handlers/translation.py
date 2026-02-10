@@ -10,7 +10,6 @@ from bot.db.storage import get_user_languages
 from bot.services.lang_detect import detect_language
 from bot.services.translation_service import translate_text, AppLang
 from bot.services.voice_service import transcribe_audio
-from bot.handlers.start import build_main_menu_keyboard
 
 router = Router()
 logger = logging.getLogger(__name__)
@@ -82,7 +81,7 @@ async def handle_text(message: Message):
         await message.answer("❌ Error while translating text. Please try again later.")
         return
 
-    # Только перевод, без дополнительных фраз и без меню под сообщением
+    # Только перевод, без дополнительных фраз
     await message.answer(translation)
 
 
