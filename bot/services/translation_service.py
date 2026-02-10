@@ -19,8 +19,9 @@ async def translate_text(
     target_lang: AppLang,
 ) -> str:
     """
-    Translate text from source_lang to target_lang using GPT model.
-    Returns translation as plain text.
+    Перевод между RU/EN/VI с пост‑проверкой языка ответа.
+    Если модель вернула не целевой язык, принудительно
+    перезапрашиваем перевод уже полученного текста.
     """
     source_name = LANG_NAMES[source_lang]
     target_name = LANG_NAMES[target_lang]
@@ -31,46 +32,42 @@ async def translate_text(
         "Return ONLY the translated text, no quotes, no commentary."
     )
 
-    extra_constraints = ""
-    # Уточняем для популярного кейса EN -> RU, чтобы модель не оставляла текст на английском.
-    if source_lang == "EN" and target_lang == "RU":
-        extra_constraints = (
-            "\nThe source text is in English. "
-            "Your answer MUST be a natural Russian translation. "
-            "Do NOT answer in English and do NOT mix English and Russian."
-        )
-
-    user_prompt = (
+    base_user_prompt = (
         f"Source language: {source_name}\n"
         f"Target language: {target_name}\n"
-        f"Instructions: Translate the text below from the source language "
-        f"to the target language.{extra_constraints}\n\n"
+        "Instructions: Translate the text below from the source language "
+        f"to the target language.\n\n"
         f"Text:\n{text}"
     )
 
-    async def _call_model(extra_hint: str = "") -> str:
-        final_user_prompt = user_prompt + extra_hint
-        response = await client.chat.completions.create(
+    async def call_model(user_prompt: str) -> str:
+        resp = await client.chat.completions.create(
             model=settings.openai_model,
             messages=[
                 {"role": "system", "content": system_prompt},
-                {"role": "user", "content": final_user_prompt},
+                {"role": "user", "content": user_prompt},
             ],
             temperature=0.2,
         )
-        return (response.choices[0].message.content or "").strip()
+        return (resp.choices[0].message.content or "").strip()
 
-    # Первый вызов
-    translation = await _call_model()
+    # 1. Первый вызов
+    translation = await call_model(base_user_prompt)
 
-    # Пост‑проверка: если модель всё равно ответила не на целевом языке,
-    # пробуем один раз уточнить инструкцию и переспросить.
+    # 2. Проверяем язык результата
     out_lang = detect_language(translation)
-    if out_lang is None or out_lang != target_lang:
-        strong_hint = (
-            "\n\nIMPORTANT: Your answer MUST be written entirely in "
-            f"{target_name} only. Do NOT use any other language."
-        )
-        translation = await _call_model(strong_hint)
+    if out_lang is not None and out_lang == target_lang:
+        return translation
 
-    return translation.strip()
+    # 3. Второй шанс: заставляем ещё раз перевести уже полученный текст
+    retry_prompt = (
+        f"Source language: {source_name}\n"
+        f"Target language: {target_name}\n"
+        "The previous attempt did not produce text in the target language.\n"
+        "Now, translate the following text to the target language.\n"
+        "Answer ONLY in the target language, without explanations "
+        "or mixing languages.\n\n"
+        f"Text:\n{translation}"
+    )
+    translation2 = await call_model(retry_prompt)
+    return translation2.strip()
