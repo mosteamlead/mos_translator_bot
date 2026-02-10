@@ -25,14 +25,25 @@ async def translate_text(
     target_name = LANG_NAMES[target_lang]
 
     system_prompt = (
-        "You are a professional translator. "
-        "Translate user text between languages without explanations. "
+        "You are a professional translator.\n"
+        "Translate user text between languages without explanations.\n"
         "Return ONLY the translated text, no quotes, no commentary."
     )
+
+    extra_constraints = ""
+    # Уточняем для популярного кейса EN -> RU, чтобы модель не оставляла текст на английском.
+    if source_lang == "EN" and target_lang == "RU":
+        extra_constraints = (
+            "\nThe source text is in English. "
+            "Your answer MUST be a natural Russian translation. "
+            "Do NOT answer in English and do NOT mix English and Russian."
+        )
 
     user_prompt = (
         f"Source language: {source_name}\n"
         f"Target language: {target_name}\n"
+        f"Instructions: Translate the text below from the source language "
+        f"to the target language.{extra_constraints}\n\n"
         f"Text:\n{text}"
     )
 
