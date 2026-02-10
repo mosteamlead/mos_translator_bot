@@ -79,6 +79,7 @@ async def cmd_lang(message: Message):
 async def on_target_language(callback: CallbackQuery):
     """
     Обработка выбора языка перевода (EN или VI).
+    Родной язык всегда русский (RU).
     """
     user_id = callback.from_user.id
     lang_to_code = callback.data.split(":", maxsplit=1)[1]
@@ -90,13 +91,14 @@ async def on_target_language(callback: CallbackQuery):
     lang_from_code, _ = await get_user_languages(user_id)
     from_meta = LANGS[lang_from_code]
     to_meta = LANGS[lang_to_code]
+    display_code = DISPLAY_CODES[lang_to_code]
 
-await callback.message.edit_text(
-    f"Язык перевода настроен ✅\n\n"
-    f"🔁 {from_meta['flag']} Русский (RU) → "
-    f"{to_meta['flag']} {to_meta['label']} ({lang_to_code})\n\n"
-    "Теперь можешь отправлять мне текст или голосовые.\n"
-    "- Если говоришь или пишешь по‑русски, переведу на выбранный язык.\n"
-    "- Если пишешь на выбранном языке, переведу на русский.",
-)
+    await callback.message.edit_text(
+        "Язык перевода настроен ✅\n\n"
+        f"🔁 {from_meta['flag']} Русский (RU) → "
+        f"{to_meta['flag']} {to_meta['label']} ({display_code})\n\n"
+        "Теперь можешь отправлять мне текст или голосовые.\n"
+        "- Если говоришь или пишешь по‑русски, переведу на выбранный язык.\n"
+        "- Если пишешь на выбранном языке, переведу на русский.",
+    )
     await callback.answer()
