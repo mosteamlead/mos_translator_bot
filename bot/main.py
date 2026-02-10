@@ -3,6 +3,7 @@ import logging
 
 from aiogram import Bot, Dispatcher
 from aiogram.enums import ParseMode
+from aiogram.client.default import DefaultBotProperties
 
 from bot.config import settings
 from bot.db.storage import init_db
@@ -21,7 +22,10 @@ async def main():
     logger.info("Initializing database...")
     await init_db()
 
-    bot = Bot(token=settings.telegram_bot_token, parse_mode=ParseMode.HTML)
+    bot = Bot(
+        token=settings.telegram_bot_token,
+        default=DefaultBotProperties(parse_mode=ParseMode.HTML),
+    )
     dp = Dispatcher()
 
     dp.include_router(start.router)
