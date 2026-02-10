@@ -15,10 +15,20 @@ router = Router()
 logger = logging.getLogger(__name__)
 
 
+def _looks_latin(text: str) -> bool:
+    """Грубая эвристика: текст похож на латиницу (английский)."""
+    letters = [ch for ch in text if ch.isalpha()]
+    if not letters:
+        return False
+    latin = sum("a" <= ch.lower() <= "z" for ch in letters)
+    return latin / len(letters) > 0.6
+
+
 def choose_direction(
     detected: Optional[str],
     lang_from: AppLang,
     lang_to: AppLang,
+    text: str,
 ) -> Tuple[AppLang, AppLang]:
     """
     Упрощённая логика для русского бота:
@@ -28,15 +38,20 @@ def choose_direction(
     Правила:
     - Если распознали RU -> переводим на lang_to
     - Если распознали lang_to -> переводим на RU
-    - Если не распознали (None) -> считаем, что это RU и переводим на lang_to
-    - Если распознали другой язык -> тоже переводим на RU (как наиболее безопасный вариант)
+    - Если не распознали (None):
+        * если текст похож на латиницу и lang_to == EN -> считаем, что это EN и переводим на RU
+        * иначе считаем, что это RU и переводим на lang_to
+    - Если распознали другой язык -> переводим на RU (как наиболее безопасный вариант)
     """
     if detected == lang_from:  # RU -> lang_to
         return lang_from, lang_to
     if detected == lang_to:  # EN/VI -> RU
         return lang_to, lang_from
     if detected is None:
-        # короткий текст, не распознали язык — считаем, что это русский
+        if lang_to == "EN" and _looks_latin(text):
+            # короткий латинский текст при паре RU-EN — скорее всего английский
+            return lang_to, lang_from
+        # иначе считаем, что это русский
         return lang_from, lang_to
     # другой язык → переводим на русский
     return detected, lang_from
@@ -78,7 +93,7 @@ async def handle_text(message: Message):
         lang_to,
     )
 
-    src_lang, dst_lang = choose_direction(detected, lang_from, lang_to)
+    src_lang, dst_lang = choose_direction(detected, lang_from, lang_to, text)
     try:
         translation = await translate_text(text, source_lang=src_lang, target_lang=dst_lang)
     except Exception as e:
@@ -150,7 +165,7 @@ async def handle_voice(message: Message):
         lang_to,
     )
 
-    src_lang, dst_lang = choose_direction(detected, lang_from, lang_to)
+    src_lang, dst_lang = choose_direction(detected, lang_from, lang_to, text)
     try:
         translation = await translate_text(text, source_lang=src_lang, target_lang=dst_lang)
     except Exception as e:
