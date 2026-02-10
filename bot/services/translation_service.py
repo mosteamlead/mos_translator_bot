@@ -1,73 +1,209 @@
-from typing import Literal
+import logging
+import tempfile
+from pathlib import Path
+from typing import Optional, Tuple
 
-from bot.config import settings
-from bot.services.openai_client import client
+from aiogram import Router, F
+from aiogram.types import Message
+
+from bot.db.storage import get_user_languages
 from bot.services.lang_detect import detect_language
+from bot.services.translation_service import translate_text, AppLang
+from bot.services.voice_service import transcribe_audio
 
-AppLang = Literal["RU", "EN", "VI"]
-
-LANG_NAMES = {
-    "RU": "Russian",
-    "EN": "English",
-    "VI": "Vietnamese",
-}
+router = Router()
+logger = logging.getLogger(__name__)
 
 
-async def translate_text(
+def _looks_latin(text: str) -> bool:
+    """Грубая эвристика: текст похож на латиницу (английский)."""
+    letters = [ch for ch in text if ch.isalpha()]
+    if not letters:
+        return False
+    latin = sum("a" <= ch.lower() <= "z" for ch in letters)
+    return latin / len(letters) > 0.6
+
+
+def _has_cyrillic(text: str) -> bool:
+    """Проверяем, есть ли кириллица (русский)."""
+    return any("а" <= ch.lower() <= "я" or ch in "ёЁ" for ch in text)
+
+
+def choose_direction(
+    detected: Optional[str],
+    lang_from: AppLang,
+    lang_to: AppLang,
     text: str,
-    source_lang: AppLang,
-    target_lang: AppLang,
-) -> str:
+) -> Tuple[AppLang, AppLang]:
     """
-    Перевод между RU/EN/VI с пост‑проверкой языка ответа.
-    Если модель вернула не целевой язык, принудительно
-    перезапрашиваем перевод уже полученного текста.
+    Упрощённая логика для русского бота:
+    - lang_from всегда RU (родной)
+    - lang_to = EN или VI (язык перевода)
+
+    Правила:
+    - Если распознали RU -> переводим на lang_to
+    - Если распознали lang_to -> переводим на RU
+    - Если не распознали (None):
+        * если текст похож на латиницу и lang_to == EN -> считаем, что это EN и переводим на RU
+        * иначе считаем, что это RU и переводим на lang_to
+    - Если распознали другой язык -> переводим на RU (как наиболее безопасный вариант)
     """
-    source_name = LANG_NAMES[source_lang]
-    target_name = LANG_NAMES[target_lang]
+    if detected == lang_from:  # RU -> lang_to
+        # но если пара RU-VI и в тексте совсем нет кириллицы, то это, скорее всего, VI -> RU
+        if lang_to == "VI" and not _has_cyrillic(text):
+            return lang_to, lang_from
+        return lang_from, lang_to
+    if detected == lang_to:  # EN/VI -> RU
+        return lang_to, lang_from
+    if detected is None:
+        if lang_to == "EN" and _looks_latin(text):
+            # короткий латинский текст при паре RU-EN — скорее всего английский
+            return lang_to, lang_from
+        if lang_to == "VI" and not _has_cyrillic(text):
+            # при паре RU-VI и отсутствии кириллицы считаем, что это вьетнамский
+            return lang_to, lang_from
+        # иначе считаем, что это русский
+        return lang_from, lang_to
+    # другой язык → переводим на русский
+    return detected, lang_from
 
-    system_prompt = (
-        "You are a professional translator.\n"
-        "Translate user text between languages without explanations.\n"
-        "Return ONLY the translated text, no quotes, no commentary."
-    )
 
-    base_user_prompt = (
-        f"Source language: {source_name}\n"
-        f"Target language: {target_name}\n"
-        "Instructions: Translate the text below from the source language "
-        f"to the target language.\n\n"
-        f"Text:\n{text}"
-    )
+async def _ensure_lang_pair(message: Message) -> Optional[Tuple[AppLang, AppLang]]:
+    user_id = message.from_user.id
+    lang_pair = await get_user_languages(user_id)
 
-    async def call_model(user_prompt: str) -> str:
-        resp = await client.chat.completions.create(
-            model=settings.openai_model,
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt},
-            ],
-            temperature=0.2,
+    if not lang_pair or not lang_pair[0] or not lang_pair[1]:
+        await message.answer(
+            "Language pair is not configured yet.\n"
+            "Please send /start and select two languages first."
         )
-        return (resp.choices[0].message.content or "").strip()
+        return None
 
-    # 1. Первый вызов
-    translation = await call_model(base_user_prompt)
+    lang_from, lang_to = lang_pair
+    return lang_from, lang_to  # type: ignore[return-value]
 
-    # 2. Проверяем язык результата
-    out_lang = detect_language(translation)
-    if out_lang is not None and out_lang == target_lang:
-        return translation
 
-    # 3. Второй шанс: заставляем ещё раз перевести уже полученный текст
-    retry_prompt = (
-        f"Source language: {source_name}\n"
-        f"Target language: {target_name}\n"
-        "The previous attempt did not produce text in the target language.\n"
-        "Now, translate the following text to the target language.\n"
-        "Answer ONLY in the target language, without explanations "
-        "or mixing languages.\n\n"
-        f"Text:\n{translation}"
+@router.message(F.text & ~F.via_bot)
+async def handle_text(message: Message):
+    """
+    Handle text messages: auto-detect language, choose direction, translate.
+    """
+    lang_pair = await _ensure_lang_pair(message)
+    if not lang_pair:
+        return
+
+    lang_from, lang_to = lang_pair
+    text = message.text.strip()
+
+    detected = detect_language(text)
+    logger.info(
+        "Text message from %s, detected_lang=%s, pair=(%s,%s)",
+        message.from_user.id,
+        detected,
+        lang_from,
+        lang_to,
     )
-    translation2 = await call_model(retry_prompt)
-    return translation2.strip()
+
+    src_lang, dst_lang = choose_direction(detected, lang_from, lang_to, text)
+    try:
+        translation = await translate_text(text, source_lang=src_lang, target_lang=dst_lang)
+    except Exception as e:
+        logger.exception("Translation error: %s", e)
+        await message.answer("❌ Error while translating text. Please try again later.")
+        return
+
+    # Только перевод, без дополнительных фраз
+    await message.answer(translation)
+
+
+@router.message(F.voice | F.audio)
+async def handle_voice(message: Message):
+    """
+    Handle voice messages:
+    1. Download file
+    2. Transcribe with Whisper
+    3. Auto-detect language and translate
+    """
+    lang_pair = await _ensure_lang_pair(message)
+    if not lang_pair:
+        return
+
+    lang_from, lang_to = lang_pair
+
+    tmp_dir = Path(tempfile.gettempdir())
+    file_name = f"tg_{message.from_user.id}_{message.message_id}.ogg"
+    local_path = tmp_dir / file_name
+
+    try:
+        if message.voice:
+            await message.bot.download(message.voice, destination=local_path)
+        elif message.audio:
+            await message.bot.download(message.audio, destination=local_path)
+        else:
+            await message.answer("Unsupported audio type.")
+            return
+    except Exception as e:
+        logger.exception("Failed to download audio: %s", e)
+        await message.answer("❌ Could not download audio file.")
+        return
+
+    try:
+        text = await transcribe_audio(local_path)
+        detected = detect_language(text)
+        # Если распознанный язык не из пары — пробуем ещё раз с подсказкой «русский» (часто помогает)
+        if detected not in (lang_from, lang_to) and text.strip():
+            text2 = await transcribe_audio(local_path, forced_lang=lang_from)
+            if text2 and text2.strip():
+                text = text2
+                detected = detect_language(text)
+                logger.info("Voice retry with forced_lang=%s, new detected=%s", lang_from, detected)
+    except Exception as e:
+        logger.exception("Failed to transcribe audio: %s", e)
+        await message.answer("❌ Error while transcribing your voice message.")
+        return
+    finally:
+        try:
+            if local_path.exists():
+                local_path.unlink()
+        except OSError:
+            pass
+
+    if not text.strip():
+        await message.answer("I could not recognize any speech in this audio.")
+        return
+
+    logger.info(
+        "Voice message from %s, detected_lang=%s, pair=(%s,%s), text='%s'",
+        message.from_user.id,
+        detected,
+        lang_from,
+        lang_to,
+        text[:100],
+    )
+
+    src_lang, dst_lang = choose_direction(detected, lang_from, lang_to, text)
+    try:
+        translation = await translate_text(text, source_lang=src_lang, target_lang=dst_lang)
+    except Exception as e:
+        logger.exception("Translation error (voice): %s", e)
+        await message.answer("❌ Ошибка при переводе голосового сообщения. Попробуй ещё раз.")
+        return
+
+    # На ГС не показывать английский/вьетнамский текстом — только перевод на русский или «не расслышал».
+    # Если ответ в «чужом» языке (EN/VI), когда ждали русский — не показываем. Если ждали EN/VI — только при совпадении.
+    out_lang = detect_language(translation)
+    show_translation = False
+    if dst_lang == "RU":
+        # Ждали русский: показываем, если ответ не EN и не VI (русский или не определили — ок)
+        show_translation = out_lang not in ("EN", "VI")
+    else:
+        # Ждали EN или VI: показываем только если ответ точно в целевом языке
+        show_translation = out_lang == dst_lang
+
+    if not show_translation:
+        await message.answer(
+            "Извини, не расслышал. Пожалуйста, перезапиши голосовое — переведу."
+        )
+        return
+
+    await message.answer(translation)

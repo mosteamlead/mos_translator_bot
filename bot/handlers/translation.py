@@ -149,6 +149,14 @@ async def handle_voice(message: Message):
 
     try:
         text = await transcribe_audio(local_path)
+        detected = detect_language(text)
+        # Если распознанный язык не из пары — пробуем ещё раз с подсказкой «русский» (часто помогает)
+        if detected not in (lang_from, lang_to) and text.strip():
+            text2 = await transcribe_audio(local_path, forced_lang=lang_from)
+            if text2 and text2.strip():
+                text = text2
+                detected = detect_language(text)
+                logger.info("Voice retry with forced_lang=%s, new detected=%s", lang_from, detected)
     except Exception as e:
         logger.exception("Failed to transcribe audio: %s", e)
         await message.answer("❌ Error while transcribing your voice message.")
@@ -164,7 +172,6 @@ async def handle_voice(message: Message):
         await message.answer("I could not recognize any speech in this audio.")
         return
 
-    detected = detect_language(text)
     logger.info(
         "Voice message from %s, detected_lang=%s, pair=(%s,%s), text='%s'",
         message.from_user.id,
@@ -182,15 +189,21 @@ async def handle_voice(message: Message):
         await message.answer("❌ Ошибка при переводе голосового сообщения. Попробуй ещё раз.")
         return
 
-    # Проверяем язык готового перевода: если не совпадает с целевым, просим перезаписать
+    # На ГС не показывать английский/вьетнамский текстом — только перевод на русский или «не расслышал».
+    # Если ответ в «чужом» языке (EN/VI), когда ждали русский — не показываем. Если ждали EN/VI — только при совпадении.
     out_lang = detect_language(translation)
-    if out_lang is None or out_lang != dst_lang:
+    show_translation = False
+    if dst_lang == "RU":
+        # Ждали русский: показываем, если ответ не EN и не VI (русский или не определили — ок)
+        show_translation = out_lang not in ("EN", "VI")
+    else:
+        # Ждали EN или VI: показываем только если ответ точно в целевом языке
+        show_translation = out_lang == dst_lang
+
+    if not show_translation:
         await message.answer(
-            "Кажется, я неправильно распознал голосовое и не уверен в переводе.\n\n"
-            "Пожалуйста, перезапиши сообщение чуть чётче, желательно в тихом месте — "
-            "и я попробую перевести ещё раз."
+            "Извини, не расслышал. Пожалуйста, перезапиши голосовое — переведу."
         )
         return
 
-    # Если всё ок — отправляем только перевод
     await message.answer(translation)
